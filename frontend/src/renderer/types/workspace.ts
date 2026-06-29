@@ -96,6 +96,8 @@ export type WorkspaceSession = {
 	workspaceId: string;
 	workspaceName: string;
 	title: string;
+	/** Raw issue/task identifier from the daemon. Intake IDs are provider-prefixed. */
+	issueId?: string;
 	provider: AgentProvider;
 	kind?: SessionKind;
 	branch: string;
@@ -132,9 +134,19 @@ export type WorkspaceSession = {
 	displayStatus?: WorkerDisplayStatus;
 };
 
+export function canonicalTrackerIssueId(issueId?: string): string | undefined {
+	return issueId?.startsWith("github:") ? issueId : undefined;
+}
+
 /** Glanceable worker status. Maps 1:1 to the accent colors in DESIGN.md. */
 export type WorkerDisplayStatus =
-	"working" | "needs_you" | "mergeable" | "ci_failed" | "no_signal" | "done" | "unknown";
+	| "working"
+	| "needs_you"
+	| "mergeable"
+	| "ci_failed"
+	| "no_signal"
+	| "done"
+	| "unknown";
 
 export function workerDisplayStatus(session: WorkspaceSession): WorkerDisplayStatus {
 	if (session.displayStatus) return session.displayStatus;

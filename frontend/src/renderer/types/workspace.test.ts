@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	attentionZone,
+	canonicalTrackerIssueId,
 	findProjectOrchestrator,
 	sessionIsActive,
 	sessionNeedsAttention,
@@ -19,6 +20,13 @@ import {
 	type WorkspaceSession,
 	type WorkspaceSummary,
 } from "./workspace";
+
+describe("canonicalTrackerIssueId", () => {
+	it("keeps provider-prefixed intake ids and rejects manual task titles", () => {
+		expect(canonicalTrackerIssueId("github:acme/project#42")).toBe("github:acme/project#42");
+		expect(canonicalTrackerIssueId("Fix fallback renderer")).toBeUndefined();
+	});
+});
 
 function sessionWith(overrides: Partial<WorkspaceSession>): WorkspaceSession {
 	return {
