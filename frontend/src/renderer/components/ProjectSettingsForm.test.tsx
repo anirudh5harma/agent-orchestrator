@@ -289,6 +289,148 @@ describe("ProjectSettingsForm", () => {
 		});
 	});
 
+	it("saves a Linear intake rule with team key", async () => {
+		getMock.mockResolvedValue({
+			data: {
+				status: "ok",
+				project: {
+					id: "proj-1",
+					name: "Project One",
+					kind: "single_repo",
+					path: "/repo/project-one",
+					repo: "",
+					defaultBranch: "main",
+					config: {
+						worker: { agent: "codex" },
+						orchestrator: { agent: "claude-code" },
+					},
+				},
+			},
+			error: undefined,
+		});
+
+		renderSettings();
+
+		await userEvent.click(await screen.findByLabelText("Enable issue intake"));
+		await chooseOption(screen.getByRole("combobox", { name: "Provider" }), "Linear");
+		await userEvent.type(screen.getByLabelText("Team key"), "ENG");
+		await userEvent.type(screen.getByLabelText("Labels"), "agent-ready");
+
+		await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+		await waitFor(() => expect(putMock).toHaveBeenCalledTimes(1));
+		const body = putMock.mock.calls[0][1].body.config;
+		expect(body.trackerIntake).toEqual({
+			enabled: true,
+			provider: "linear",
+			team: "ENG",
+			labels: ["agent-ready"],
+		});
+	});
+
+	it("saves a Jira intake rule with site URL and project key", async () => {
+		getMock.mockResolvedValue({
+			data: {
+				status: "ok",
+				project: {
+					id: "proj-1",
+					name: "Project One",
+					kind: "single_repo",
+					path: "/repo/project-one",
+					repo: "",
+					defaultBranch: "main",
+					config: {
+						worker: { agent: "codex" },
+						orchestrator: { agent: "claude-code" },
+					},
+				},
+			},
+			error: undefined,
+		});
+
+		renderSettings();
+
+		await userEvent.click(await screen.findByLabelText("Enable issue intake"));
+		await chooseOption(screen.getByRole("combobox", { name: "Provider" }), "Jira");
+		await userEvent.type(screen.getByLabelText("Site URL"), "acme.atlassian.net");
+		await userEvent.type(screen.getByLabelText("Project key"), "ENG");
+		await userEvent.type(screen.getByLabelText("Labels"), "agent-ready");
+
+		await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+		await waitFor(() => expect(putMock).toHaveBeenCalledTimes(1));
+		const body = putMock.mock.calls[0][1].body.config;
+		expect(body.trackerIntake).toEqual({
+			enabled: true,
+			provider: "jira",
+			baseURL: "acme.atlassian.net",
+			projectKey: "ENG",
+			labels: ["agent-ready"],
+		});
+	});
+
+	it("blocks saving Linear intake without a team key", async () => {
+		getMock.mockResolvedValue({
+			data: {
+				status: "ok",
+				project: {
+					id: "proj-1",
+					name: "Project One",
+					kind: "single_repo",
+					path: "/repo/project-one",
+					repo: "",
+					defaultBranch: "main",
+					config: {
+						worker: { agent: "codex" },
+						orchestrator: { agent: "claude-code" },
+					},
+				},
+			},
+			error: undefined,
+		});
+
+		renderSettings();
+
+		await userEvent.click(await screen.findByLabelText("Enable issue intake"));
+		await chooseOption(screen.getByRole("combobox", { name: "Provider" }), "Linear");
+		await userEvent.type(screen.getByLabelText("Labels"), "agent-ready");
+		await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+		expect(await screen.findAllByText("Linear intake requires a team key.")).not.toHaveLength(0);
+		expect(putMock).not.toHaveBeenCalled();
+	});
+
+	it("blocks saving Jira intake without site URL and project key", async () => {
+		getMock.mockResolvedValue({
+			data: {
+				status: "ok",
+				project: {
+					id: "proj-1",
+					name: "Project One",
+					kind: "single_repo",
+					path: "/repo/project-one",
+					repo: "",
+					defaultBranch: "main",
+					config: {
+						worker: { agent: "codex" },
+						orchestrator: { agent: "claude-code" },
+					},
+				},
+			},
+			error: undefined,
+		});
+
+		renderSettings();
+
+		await userEvent.click(await screen.findByLabelText("Enable issue intake"));
+		await chooseOption(screen.getByRole("combobox", { name: "Provider" }), "Jira");
+		await userEvent.type(screen.getByLabelText("Labels"), "agent-ready");
+		await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+		expect(await screen.findAllByText("Jira intake requires a site URL and project key.")).not.toHaveLength(0);
+		expect(putMock).not.toHaveBeenCalled();
+	});
+
 	it("blocks saving when intake is enabled without a label or assignee", async () => {
 		getMock.mockResolvedValue({
 			data: {
