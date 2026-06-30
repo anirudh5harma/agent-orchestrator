@@ -134,8 +134,11 @@ export type WorkspaceSession = {
 	displayStatus?: WorkerDisplayStatus;
 };
 
+const TRACKER_PROVIDER_PREFIXES = ["github:", "linear:", "jira:"] as const;
+
 export function canonicalTrackerIssueId(issueId?: string): string | undefined {
-	return issueId?.startsWith("github:") ? issueId : undefined;
+	if (!issueId) return undefined;
+	return TRACKER_PROVIDER_PREFIXES.some((prefix) => issueId.startsWith(prefix)) ? issueId : undefined;
 }
 
 /** Glanceable worker status. Maps 1:1 to the accent colors in DESIGN.md. */
