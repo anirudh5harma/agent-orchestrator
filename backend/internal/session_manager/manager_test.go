@@ -2351,6 +2351,35 @@ func TestRestore_PromptlessOrchestratorResumesViaAdapter(t *testing.T) {
 	}
 }
 
+func TestRestore_RuntimeEnvIncludesRunFilePath(t *testing.T) {
+	st := newFakeStore()
+	st.sessions["mer-1"] = domain.SessionRecord{
+		ID: "mer-1", ProjectID: "mer", Kind: domain.KindOrchestrator, IsTerminated: true,
+		Metadata: domain.SessionMetadata{WorkspacePath: "/ws/mer-1", Branch: "ao/mer-orchestrator"},
+		Activity: domain.Activity{State: domain.ActivityExited},
+	}
+	rt := &fakeRuntime{}
+	runFilePath := filepath.Join(t.TempDir(), "running.json")
+	lookPath := func(string) (string, error) { return "/bin/true", nil }
+	m := New(Deps{
+		Runtime:     rt,
+		Agents:      singleAgent{agent: alwaysResumeAgent{}},
+		Workspace:   &fakeWorkspace{},
+		Store:       st,
+		Messenger:   &fakeMessenger{},
+		Lifecycle:   &fakeLCM{store: st},
+		RunFilePath: runFilePath,
+		LookPath:    lookPath,
+	})
+
+	if _, err := m.Restore(ctx, "mer-1"); err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	if got := rt.lastCfg.Env[EnvRunFile]; got != runFilePath {
+		t.Fatalf("runtime env AO_RUN_FILE = %q, want %q", got, runFilePath)
+	}
+}
+
 // TestRestore_PromptlessUnresumableRelaunchesFresh covers the genuine-reboot
 // case: a promptless session whose adapter cannot resume (no native session id,
 // no captured AgentSessionID) must be relaunched fresh via GetLaunchCommand
