@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aoagents/agent-orchestrator/backend/internal/config"
 	"github.com/aoagents/agent-orchestrator/backend/internal/domain"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
 	aoprocess "github.com/aoagents/agent-orchestrator/backend/internal/process"
@@ -284,7 +285,7 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (domain.Sess
 
 	branch := cfg.Branch
 	if branch == "" {
-		branch = defaultSpawnBranch(id, cfg.Kind, sessionPrefix(project), project.Kind.WithDefault())
+		branch = defaultSpawnBranch(config.InstanceNamespace(m.dataDir), id, cfg.Kind, sessionPrefix(project), project.Kind.WithDefault())
 	}
 	ws, workspaceProject, err := m.createSessionWorkspace(ctx, project, cfg, id, branch)
 	if err != nil {
@@ -1762,7 +1763,10 @@ func seedRecord(cfg ports.SpawnConfig, now time.Time) domain.SessionRecord {
 	}
 }
 
-func defaultSessionBranch(id domain.SessionID, kind domain.SessionKind, prefix string) string {
+func defaultSessionBranch(namespace string, id domain.SessionID, kind domain.SessionKind, prefix string) string {
+	if namespace != "" {
+		return "ao/" + namespace + "/" + string(id) + "/root"
+	}
 	if kind == domain.KindOrchestrator {
 		return "ao/" + prefix + "-orchestrator"
 	}
@@ -1773,11 +1777,14 @@ func defaultSessionBranch(id domain.SessionID, kind domain.SessionKind, prefix s
 	return "ao/" + string(id) + "/root"
 }
 
-func defaultSpawnBranch(id domain.SessionID, kind domain.SessionKind, prefix string, projectKind domain.ProjectKind) string {
+func defaultSpawnBranch(namespace string, id domain.SessionID, kind domain.SessionKind, prefix string, projectKind domain.ProjectKind) string {
 	if projectKind == domain.ProjectKindWorkspace {
+		if namespace != "" {
+			return "ao/" + namespace + "/" + string(id)
+		}
 		return "ao/" + string(id)
 	}
-	return defaultSessionBranch(id, kind, prefix)
+	return defaultSessionBranch(namespace, id, kind, prefix)
 }
 
 func buildPrompt(cfg ports.SpawnConfig) string {

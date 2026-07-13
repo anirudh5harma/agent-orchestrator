@@ -109,7 +109,7 @@ func TestCommandBuilders(t *testing.T) {
 // -- session name sanitization --
 
 func TestSessionNameSanitizesSpecialChars(t *testing.T) {
-	got, err := tmuxSessionName("repo/issue#42.1")
+	got, err := tmuxSessionName("", "repo/issue#42.1")
 	if err != nil {
 		t.Fatalf("tmuxSessionName: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestSessionNamePassesThroughShortConforming(t *testing.T) {
 
 func TestSessionNameMatchesCreateNaming(t *testing.T) {
 	long := domain.SessionID(strings.Repeat("x", 60) + "-1")
-	viaCreate, err := tmuxSessionName(long)
+	viaCreate, err := tmuxSessionName("", long)
 	if err != nil {
 		t.Fatalf("tmuxSessionName: %v", err)
 	}
@@ -141,6 +141,36 @@ func TestSessionNameMatchesCreateNaming(t *testing.T) {
 	}
 	if SessionName(string(long)) == string(long) {
 		t.Fatal("expected long id to be sanitised to a different name")
+	}
+}
+
+func TestSessionNameWithNamespaceMatchesCreateNaming(t *testing.T) {
+	const namespace = "i-abc123"
+	id := domain.SessionID("myproj-1")
+	viaCreate, err := tmuxSessionName(namespace, id)
+	if err != nil {
+		t.Fatalf("tmuxSessionName: %v", err)
+	}
+	if got := SessionNameWithNamespace(namespace, string(id)); got != viaCreate {
+		t.Fatalf("SessionNameWithNamespace = %q, but Create uses %q", got, viaCreate)
+	}
+	if viaCreate != "i-abc123-myproj-1" {
+		t.Fatalf("namespaced session name = %q, want i-abc123-myproj-1", viaCreate)
+	}
+}
+
+func TestSessionNameWithNamespaceSanitizesCombinedName(t *testing.T) {
+	const namespace = "i-abc123"
+	id := strings.Repeat("x", 60) + "/bad"
+	got := SessionNameWithNamespace(namespace, id)
+	if !sessionIDPattern.MatchString(got) {
+		t.Fatalf("SessionNameWithNamespace = %q, want pattern match", got)
+	}
+	if strings.Contains(got, "/") {
+		t.Fatalf("SessionNameWithNamespace = %q, want sanitized slash", got)
+	}
+	if !strings.HasPrefix(got, "i-abc123-") {
+		t.Fatalf("SessionNameWithNamespace = %q, want namespace prefix preserved before sanitize", got)
 	}
 }
 
@@ -222,6 +252,39 @@ func TestCreateIssuesNewSessionAndStatusOff(t *testing.T) {
 	// Call 4: has-session (IsAlive, uses exact-match target =sess-1).
 	if got, want := fr.calls[4].args, hasSessionArgs("sess-1"); !reflect.DeepEqual(got, want) {
 		t.Fatalf("call[4] = %#v, want %#v", got, want)
+	}
+}
+
+func TestCreateUsesSameNamespacedSessionForCreateAndLookup(t *testing.T) {
+	fr := &fakeRunner{}
+	r := New(Options{Binary: "tmux-test", Timeout: time.Second, Shell: "/bin/sh", Namespace: "i-abc123"})
+	r.runner = fr
+	r.enterDelay = 0
+	fr.outputs = [][]byte{nil, nil, nil, nil}
+
+	h, err := r.Create(context.Background(), ports.RuntimeConfig{
+		SessionID:     "sess-1",
+		WorkspacePath: "/tmp/ws",
+		Argv:          []string{"echo", "hi"},
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if h.ID != "i-abc123-sess-1" {
+		t.Fatalf("handle ID = %q, want i-abc123-sess-1", h.ID)
+	}
+	for i, want := range [][]string{
+		setStatusOffArgs("i-abc123-sess-1"),
+		setMouseOnArgs("i-abc123-sess-1"),
+		hasSessionArgs("i-abc123-sess-1"),
+	} {
+		got := fr.calls[i+1].args
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("call[%d] = %#v, want %#v", i+1, got, want)
+		}
+	}
+	if !strings.Contains(strings.Join(fr.calls[0].args, " "), "-s i-abc123-sess-1") {
+		t.Fatalf("new-session args missing namespaced id: %v", fr.calls[0].args)
 	}
 }
 
