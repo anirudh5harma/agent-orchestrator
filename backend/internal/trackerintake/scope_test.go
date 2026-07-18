@@ -18,10 +18,30 @@ func TestRepository(t *testing.T) {
 	}
 }
 
+func TestRepositoryAcceptsGitHubSCPStyleOrigin(t *testing.T) {
+	for _, remote := range []string{
+		"https://github.com/acme/demo.git",
+		"git@github.com:acme/demo.git",
+		"alice@github.com:acme/demo.git",
+		"github.com:acme/demo.git",
+	} {
+		t.Run(remote, func(t *testing.T) {
+			project := domain.ProjectRecord{RepoOriginURL: remote}
+			repo, ok := Repository(project, domain.TrackerIntakeConfig{Enabled: true})
+			if !ok || repo.Native != "acme/demo" {
+				t.Fatalf("Repository = %#v, %v; want acme/demo, true", repo, ok)
+			}
+		})
+	}
+}
+
 func TestRepositoryRejectsNonGitHubOrigin(t *testing.T) {
 	for _, remote := range []string{
 		"https://gitlab.com/acme/demo.git",
 		"git@gitlab.com:acme/demo.git",
+		"alice@gitlab.com:acme/demo.git",
+		"gitlab.com:acme/demo.git",
+		"acme/demo",
 	} {
 		t.Run(remote, func(t *testing.T) {
 			project := domain.ProjectRecord{RepoOriginURL: remote}

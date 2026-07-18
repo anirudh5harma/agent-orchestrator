@@ -25,6 +25,7 @@ vi.mock("../lib/api-client", () => ({
 }));
 
 import { ProjectSettingsForm } from "./ProjectSettingsForm";
+import { buildIntake, deriveGitHubRepo } from "./IntakeFields";
 import { workspaceQueryKey } from "../hooks/useWorkspaceQuery";
 import type { WorkspaceSummary } from "../types/workspace";
 
@@ -122,6 +123,19 @@ beforeEach(() => {
 });
 
 describe("ProjectSettingsForm", () => {
+	it("derives intake repos only from GitHub origins", () => {
+		expect(deriveGitHubRepo("https://github.com/acme/project-one.git")).toBe("acme/project-one");
+		expect(deriveGitHubRepo("alice@github.com:acme/project-one.git")).toBe("acme/project-one");
+		expect(deriveGitHubRepo("github.com:acme/project-one.git")).toBe("acme/project-one");
+		expect(deriveGitHubRepo("alice@gitlab.com:acme/project-one.git")).toBeUndefined();
+		expect(deriveGitHubRepo("gitlab.com:acme/project-one.git")).toBeUndefined();
+		expect(deriveGitHubRepo("acme/project-one")).toBeUndefined();
+	});
+
+	it("clears tracker intake config when disabled", () => {
+		expect(buildIntake({ enabled: false, repo: "acme/demo", labels: ["bug"] })).toBeUndefined();
+	});
+
 	it("loads the current project settings and saves the exposed fields without dropping hidden config", async () => {
 		mockProject({
 			id: "proj-1",
@@ -335,13 +349,42 @@ describe("ProjectSettingsForm", () => {
 		});
 	});
 
+	it("does not persist stale labels after selecting labels and disabling intake", async () => {
+		mockProject({
+			id: "proj-1",
+			name: "Project One",
+			kind: "single_repo",
+			path: "/repo/project-one",
+			repo: "git@github.com:acme/project-one.git",
+			defaultBranch: "main",
+			config: {
+				worker: { agent: "codex" },
+				orchestrator: { agent: "claude-code" },
+			},
+		});
+
+		renderSettings();
+
+		const intakeToggle = await screen.findByLabelText("Enable issue intake");
+		await userEvent.click(intakeToggle);
+		await userEvent.click(screen.getByRole("button", { name: "Labels" }));
+		await userEvent.click(await screen.findByRole("option", { name: /bug/i }));
+		await userEvent.keyboard("{Escape}");
+		await userEvent.click(intakeToggle);
+		await userEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+		await waitFor(() => expect(putMock).toHaveBeenCalledTimes(1));
+		const body = putMock.mock.calls[0]?.[1]?.body;
+		expect(body.config.trackerIntake).toBeUndefined();
+	});
+
 	it("does not render a GitHub repository link for non-GitHub remotes", async () => {
 		mockProject({
 			id: "proj-1",
 			name: "Project One",
 			kind: "single_repo",
 			path: "/repo/project-one",
-			repo: "git@gitlab.com:acme/project-one.git",
+			repo: "alice@gitlab.com:acme/project-one.git",
 			defaultBranch: "main",
 			config: {
 				worker: { agent: "codex" },

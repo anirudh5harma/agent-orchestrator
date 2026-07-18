@@ -65,27 +65,43 @@ func parseGitHubRepoNative(remote string) string {
 	if remote == "" {
 		return ""
 	}
-	if strings.HasPrefix(remote, "git@") {
-		if hostAndPath := strings.TrimPrefix(remote, "git@"); hostAndPath != "" {
-			host, rest, ok := strings.Cut(hostAndPath, ":")
-			if !ok || !isGitHubHost(host) {
-				return ""
-			}
-			return cleanRepoPath(rest)
-		}
-	}
 	if u, err := url.Parse(remote); err == nil && u.Host != "" {
 		if isGitHubHost(u.Host) {
 			return cleanRepoPath(u.Path)
 		}
 		return ""
 	}
-	return cleanRepoPath(remote)
+	if host, path, ok := parseSCPRemote(remote); ok {
+		if !isGitHubHost(host) {
+			return ""
+		}
+		return cleanRepoPath(path)
+	}
+	return ""
 }
 
 func isGitHubHost(host string) bool {
 	host = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(host)), "www.")
 	return host == "github.com" || strings.HasSuffix(host, ".github.com") || strings.HasSuffix(host, ".ghe.io")
+}
+
+func parseSCPRemote(remote string) (string, string, bool) {
+	prefix, path, ok := strings.Cut(remote, ":")
+	if !ok || prefix == "" || path == "" {
+		return "", "", false
+	}
+	if strings.Contains(prefix, "/") || strings.HasPrefix(path, "//") {
+		return "", "", false
+	}
+	host := prefix
+	if _, afterUser, ok := strings.Cut(prefix, "@"); ok {
+		host = afterUser
+	}
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return "", "", false
+	}
+	return host, path, true
 }
 
 func cleanRepoPath(path string) string {
